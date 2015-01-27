@@ -1,14 +1,10 @@
 ---
 applications:
-- name: doge-service
+- name: simple-backing-services
   memory: 512M
   instances: 1
-  host: doge-service-${random-word}
+  host: simple-backing-services-${random-word}
   domain: cfapps.io
-  path: target/doge-service.jar
-  # services:
-    # - doge-mongo
-#  env:
-#    SPRING_PROFILES_ACTIVE: cloud
-#    DEBUG: "true"
-#    debug: "true"
+  path: target/simple.jar
+  services:
+    - postgresql-db
