@@ -8,3 +8,7 @@ applications:
   path: target/simple.jar
   services:
     - postgresql-db
+  env:
+    SPRING_PROFILES_ACTIVE: cloud
+    DEBUG: "true"
+    debug: "true"

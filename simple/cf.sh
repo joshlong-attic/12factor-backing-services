@@ -10,3 +10,5 @@ cf services | grep $db_svc || cf create-service elephantsql turtle $db_svc
 
 # deploy
 cf push
+
+cf delete-orphaned-routes

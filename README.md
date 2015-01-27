@@ -46,16 +46,16 @@ import java.util.Arrays;
 @SpringBootApplication
 public class DemoApplication {
 
-		public static void main(String[] args) {
-			SpringApplication.run(DemoApplication.class, args);
-		}
+	public static void main(String[] args) {
+		SpringApplication.run(DemoApplication.class, args);
+	}
 
-		@Bean
-		CommandLineRunner seed(ReservationRepository rr) {
-			return args -> Arrays.asList("Phil,Webb", "Josh,Long", "Dave,Syer", "Spencer,Gibb").stream()
-				.map(s -> s.split(","))
-				.forEach(namePair -> rr.save(new Reservation(namePair[0], namePair[1])));
-		}
+	@Bean
+	CommandLineRunner seed(ReservationRepository rr) {
+		return args -> Arrays.asList("Phil,Webb", "Josh,Long", "Dave,Syer", "Spencer,Gibb").stream()
+			.map(s -> s.split(","))
+			.forEach(namePair -> rr.save(new Reservation(namePair[0], namePair[1])));
+	}
 }
 
 @RepositoryRestResource
@@ -65,31 +65,31 @@ interface ReservationRepository extends JpaRepository<Reservation, Long> {
 @Entity
 class Reservation {
 
-		@Id
-		@GeneratedValue
-		private Long id;
+	@Id
+	@GeneratedValue
+	private Long id;
 
-		private String firstName, lastName;
+	private String firstName, lastName;
 
-		Reservation() {
-		}
+	Reservation() {
+	}
 
-		public Reservation(String firstName, String lastName) {
-			this.firstName = firstName;
-			this.lastName = lastName;
-		}
+	public Reservation(String firstName, String lastName) {
+		this.firstName = firstName;
+		this.lastName = lastName;
+	}
 
-		public Long getId() {
-			return id;
-		}
+	public Long getId() {
+		return id;
+	}
 
-		public String getFirstName() {
-			return firstName;
-		}
+	public String getFirstName() {
+		return firstName;
+	}
 
-		public String getLastName() {
-			return lastName;
-		}
+	public String getLastName() {
+		return lastName;
+	}
 }
 ```
 
@@ -123,6 +123,10 @@ applications:
 	path: target/simple.jar
 	services:
 		- postgresql-db
+	env:
+		SPRING_PROFILES_ACTIVE: cloud
+		DEBUG: "true"
+		debug: "true"
 
 ```
 
@@ -147,25 +151,119 @@ The [Cloud Foundry Java buildpack](https://github.com/cloudfoundry/java-buildpac
 > | `org.springframework.orm.hibernate4.LocalSessionFactoryBean`       | Relational Data Services (e.g. ClearDB, ElephantSQL) |
 > | `org.springframework.orm.jpa.AbstractEntityManagerFactoryBean`     | Relational Data Services (e.g. ClearDB, ElephantSQL) |
 
-The effect, for you, is that your application runs locally against H2 will just work when run on Cloud Foundry, in the `cloud` profile and when the application is bound to a RDBMS backing-service like PostgreSQL.
+The effect is that an application running on H2 locally will automatically run against PostgreSQL on Cloud Foundry, assuming you have a backing-service pointing to a PostgreSQL instance created and bound to the application, as we do above. This is very convenient! If your only two destination targets are localhost and Cloud Foundry, this works perfectly.
 
-Spring Boot's `VCAP` support
-============================
+Useful `Environment` properties for your Spring Application
+===========================================================
 
--	buildpack adds `cloud.*` properties.
--	Spring Boot handles `vcap.*` properties
+The default Java buildpack (which you can ovveride when doing a `cf push` or by declaring it in your `manifest.yml`) adds a Spring `Environment` `PropertySource` that registers a slew of properties that start with `cloud.`. You can see them if you visit `/env` in the above application once you've pushed the application to Cloud Foundry. Here's some of the output for my application:
+
+```json
+
+{
+	...
+	cloud.services.postgresql-db.connection.jdbcurl: "jdbc:postgresql://babar.elephantsql.com:5432/AUSER?user=AUSER&password=WOULDNTYOULIKETOKNOW",
+	...
+	cloud.services.postgresql-db.connection.uri: "postgres://AUSER:WOULDNTYOULIKETOKNOW@babar.elephantsql.com:5432/AUSER",
+	cloud.services.postgresql-db.connection.scheme: "postgres",
+	cloud.services.postgresql.connection.jdbcurl: "jdbc:postgresql://babar.elephantsql.com:5432/AUSER?user=AUSER&password=WOULDNTYOULIKETOKNOW",
+	cloud.services.postgresql.connection.port: 5432,
+	cloud.services.postgresql.connection.path: "AUSER",
+	cloud.application.host: "0.0.0.0",
+	cloud.services.postgresql-db.connection.password: "******",
+	cloud.services.postgresql-db.connection.username: "AUSER",
+	...
+	cloud.application.application_name: "simple-backing-services",
+	cloud.application.limits: {
+		mem: 512,
+		disk: 1024,
+		fds: 16384
+	},
+	cloud.services.postgresql-db.id: "postgresql-db",
+	cloud.application.application_uris: [
+	"simple-backing-services-fattiest-teniafuge.cfapps.io",
+	"simple-backing-services-unmummifying-prehnite.cfapps.io"
+],
+	cloud.application.instance_index: 0,
+	...
+}
+```
+
+You can use these properties in Spring just like you would any other property. They're very convenient, too, as they provide not only a fairly standard Heroku-esque connection URI (`cloud.services.postgresql-db.connection.uri`), but also one that can be used in a JDBC context, directly, `cloud.services.postgresql.connection.jdbcurl`. As long as you use this (or a fork of this) buildpack, you'll benefit from these properties.
+
+Cloud Foundry exposes all fo this information as standard, language and technology netural environment variables (`VCAP_SERVICES` and `VCAP_APPLICATION`). In theory, you should be able to write an application for any Cloud Foundry implementation and target these variables. Spring Boot also provides an *auto-configuration* for those variables, and this approach works whether you use the aforementioned Java buildpack or not.
+
+Here's some sample out from the `VCAP_*` properties that Spring Boot exposes, also from `/env`:
+
+```json
+{
+	...
+	vcap.application.start: "2015-01-27 09:58:13 +0000",
+	vcap.application.application_version: "9e6ba76e-039f-4585-9573-8efa9f7e9b7e",
+	vcap.application.application_uris[2]: "simple-backing-services-detersive-sterigma.cfapps.io",
+	vcap.application.uris: "simple-backing-services-fattiest-teniafuge.cfapps.io,simple-backing-services-grottoed-distillment.cfapps.io,...",
+	vcap.application.space_name: "joshlong",
+	vcap.application.started_at: "2015-01-27 09:58:13 +0000",
+	vcap.services.postgresql-db.tags: "Data Stores,Data Store,postgresql,relational,New Product",
+	vcap.services.postgresql-db.credentials.uri: "postgres://AUSER:WOULDNTYOULIKETOKNOW@babar.elephantsql.com:5432/hqsugvxo",
+	vcap.services.postgresql-db.tags[1]: "Data Store",
+	vcap.services.postgresql-db.tags[4]: "New Product",
+	vcap.application.application_name: "simple-backing-services",
+	vcap.application.name: "simple-backing-services",
+	vcap.application.uris[2]: "simple-backing-services-detersive-sterigma.cfapps.io",
+	...
+}
+```
+
+I tend to rely a little on each approach. The Spring Boot properties are convenient because they provided indexed properties. `vcap.application.application_uris[2]` provides a way to index into the array of possible routes for this application. This is ideal if you want to tell your running application what its externally adressable URI is, for example if it needs to establish callbacks at startup before any request has come in. It also provides the equivalent technology-agnostic URIs, but not the JDBC-specific connection string. So, I'd use both. This apprroach is convenient, particularly in Spring Boot, because I can be explicit in my configuration and set properties (like `spring.datasource.*`) to instruct Spring Boot on how to set things up. This is useful in the interest of being explicit, or if I have more than one backing service of the same type (like a JDBC `javax.sql.DataSource`) bound to the same application. In this case, the buildpack won't know what to do so you need to be explicit and disambiguate which backing service reference should be injected and where.
 
 Using Spring Profiles
 =====================
 
--	show how u can split config into multiple files (application.yml, application-cloud.yml) and then use in-property file references to ref vcap.* or cloud.* properties.
+Spring Boot, by default, loads `src/main/resources/application.(properties,yml)`. It will also load profile specific property files of the form, `src/main/resources/application-PROFILE.yml`. Earlier, we saw that our `manifest.yml` specifically activates the `cloud` profile by setting an environment variable. So, suppose you wanted to have a configuration that was activated only when running in a `cloud` profile, and another that was activated when there was no specific profile activated. You could create three files: `src/main/resources/application-cloud.(properties,yml)` which will be activated whenever the `cloud` profile is activated, `src/main/resources/application-default.(properties,yml)` which will be activated when no other profile is specifically activated, and `src/main/resources/application.(properties,yml)` which will be activated for all situations, no matter what.
 
-Using Java configuration `@Bean`s
-=================================
+A sample `src/main/resources/application.properties`:
 
--	show how u can exercise complete control using proper `@Bean`-definitions
+```properties
+spring.jpa.generate-ddl=true
+```
+
+A sample `src/main/resources/application-cloud.properties`:
+
+```properties
+spring.datasource.url=${cloud.services.postgresql-db.connection.jdbcurl}
+```
+
+A sample `src/main/resources/application-default.properties`:
+
+```properties
+# empty in this case because I rely on the embedded H2 instance being created
+# though you could point it to another, local,
+# PostgresSQL instancefor dev workstation configuration
+```
 
 Using Spring Cloud PaaS connectors
 ==================================
 
--	show how t
+
+
+Using Java configuration `@Bean`s
+=================================
+
+So far, we've relied on common-sense defaults provided by the platform or the framework, but you don't need to give up any control. You could, for example, explicitly define a bean in XML or Java configuration, using the values from the environment. You might do this if your application wants to use a custom connection pool or in some otherway customize the configuration of the backing service. You might also do this if the platform and framework don't have _automagic_ support for the backing service you're trying to consume.
+
+```java
+
+	@Bean
+	@Profile("cloud")
+	DataSource dataSource(
+			@Value("${cloud.services.postgresql-db.connection.jdbcurl}") String jdbcUrl) {
+		try {
+			return new SimpleDriverDataSource(
+				org.postgresql.Driver.class.newInstance() , jdbcUrl);
+		}
+		catch (Exception e) {
+			throw new RuntimeException(e) ;
+		}
+	}
+```
