@@ -20,8 +20,7 @@ class GreetingsService {
 
     @RequestMapping("/hi/{name}")
     String hi(@PathVariable String name) {
-        String msg = "Hello " + (StringUtils.hasText(name) ? ' ' + name.trim() + ' ' : "") + "!";
-        return msg;
+        return "Hello " + (StringUtils.hasText(name) ? ' ' + name.trim() + ' ' : "") + "!";
     }
 
     @RequestMapping("/hi")
