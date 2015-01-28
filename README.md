@@ -11,7 +11,7 @@ We looked at how to use [*configuration*](https://spring.io/blog/2015/01/13/conf
 
 In this post, we'll look at the way [Platform-as-a-Service (PaaS) environments](http://en.wikipedia.org/wiki/Platform_as_a_service) like [Cloud Foundry](http://cloudfoundry.org) or Heroku typically expose *backing services*, and look at ways to consume those services from inside a Spring application. For our examples, we'll use Cloud Foundry because it's open-source and easy to run in any datacenter or hosted, though most of this is pretty straightforward to apply on Heroku.
 
-A PaaS like Cloud Foundry exposes backing services as operating system process-local environment variables. Environment variables are convenient because they work for all languages and runtimes, and they're easy to change from one environment to another. This is *way* simpler than trying to get JNDI up and running on a local machine, for example, and promotes portable builds. I intend to look at backing services specifically through the lens of current-day Cloud Foundry in this post. Keep in mind though the approach is specifically intended to promote portable builds *outside* of a cloud environment.
+A PaaS like Cloud Foundry exposes backing services as operating system process-local environment variables. Environment variables are convenient because they work for all languages and runtimes, and they're easy to change from one environment to another. This is *way* simpler than trying to get JNDI up and running on a local machine, for example, and promotes portable builds. I intend to look at backing services specifically through the lens of current-day Cloud Foundry in this post. Keep in mind though the approach is specifically intended to promote portable builds *outside* of a cloud environment. Spring is tailor made to be portable; dependency injection promotes decoupling the service initialization and accquisition from its use. We can use Spring to write code that thinks about `javax.sql.DataSources` and then write configuration to source that `DataSource` from the right contexts and configuration as the application moves from one environment to another.
 
 The runtime under the next version of Cloud Foundry (hitherto referred to as *Diego* in the press) is Docker-first and Docker-native. Docker, of course, makes it easy to containerize applications, and the interface between the containerized application and the outside world is kept intentinally minimal again to promote portable applications. One of the key inputs in a Docker image is, you guessed it, environment variables! Our pal Chris Richardson has done a few nice posts on both packaging and building Spring Boot-based Docker images and on standing up backing-services in
 
@@ -245,12 +245,88 @@ A sample `src/main/resources/application-default.properties`:
 Using Spring Cloud PaaS connectors
 ==================================
 
+All of these options thus far take advantage of the `Environment` abstraction. No doubt, they're far simpler than manually picking apart the JSON structure in the `VCAP_SERVICES` variable, but we can do better. As the docs for the [Spring Cloud Connectors](https://github.com/spring-cloud/spring-cloud-connectors/blob/master/README.md)  project says:
 
+> Spring Cloud provides a simple abstraction for JVM-based applications running on cloud platforms to discover bound services and deployment information at runtime and provides support for registering discovered services as Spring beans. It is based on a plugin model so that the identical compiled application can be deployed locally or on multiple clouds, and it supports custom service definitions through Java SPI.
+
+Let's look at our revised example:
+
+```java
+package demo;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.cloud.config.java.AbstractCloudConfig;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Profile;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.rest.core.annotation.RepositoryRestResource;
+
+import javax.persistence.Entity;
+import javax.persistence.GeneratedValue;
+import javax.persistence.Id;
+import javax.sql.DataSource;
+
+@SpringBootApplication
+public class DemoApplication {
+
+    public static void main(String[] args) {
+        SpringApplication.run(DemoApplication.class, args);
+    }
+
+    @Configuration
+    @Profile("cloud")
+    public static class DataSourceConfig extends AbstractCloudConfig {
+
+        @Bean
+        DataSource reservationsPostgreSqlDb() {
+            return connectionFactory().dataSource("postgresql-db");
+        }
+    }
+
+}
+
+@RepositoryRestResource
+interface ReservationRepository extends JpaRepository<Reservation, Long> {
+}
+
+@Entity
+class Reservation {
+    @Id
+    @GeneratedValue
+    private Long id;
+
+    public Long getId() {
+        return id;
+    }
+
+    private String firstName, lastName;
+
+    Reservation() {
+    }
+
+    public Reservation(String firstName, String lastName) {
+        this.firstName = firstName;
+        this.lastName = lastName;
+    }
+
+    public String getFirstName() {
+        return firstName;
+    }
+
+    public String getLastName() {
+        return lastName;
+    }
+}
+```
+
+Instead of configuring a `javax.sql.DataSource` using properties and Spring Boot, we explicitly factory an object of the right type. There are other methods for other backing services like MongoDB, Redis, SendGrid, etc., and you can easily provide your own. We're using the Spring Cloud Connectors plugin for Cloud Foundry, though there's no reason you couldn't use the Spring Cloud Connectors plugin for Heroku, or the property-based alternative for local applications. Your application is then identical across environments, and only the external configuration differs.
 
 Using Java configuration `@Bean`s
 =================================
 
-So far, we've relied on common-sense defaults provided by the platform or the framework, but you don't need to give up any control. You could, for example, explicitly define a bean in XML or Java configuration, using the values from the environment. You might do this if your application wants to use a custom connection pool or in some otherway customize the configuration of the backing service. You might also do this if the platform and framework don't have _automagic_ support for the backing service you're trying to consume.
+So far, we've relied on common-sense defaults provided by the platform or the framework, but you don't need to give up any control. You could, for example, explicitly define a bean in XML or Java configuration, using the values from the environment. You might do this if your application wants to use a custom connection pool or in some otherway customize the configuration of the backing service. You might also do this if the platform and framework don't have *automagic* support for the backing service you're trying to consume.
 
 ```java
 

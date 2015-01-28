@@ -1,11 +1,11 @@
 ---
 applications:
-- name: simple-backing-services
+- name: connectors-backing-services
   memory: 512M
   instances: 1
-  host: simple-backing-services-${random-word}
+  host: connectors-backing-services-${random-word}
   domain: cfapps.io
-  path: target/simple.jar
+  path: target/connectors.jar
   services:
     - postgresql-db
   env:
