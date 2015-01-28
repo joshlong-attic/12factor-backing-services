@@ -1,0 +1,14 @@
+---
+applications:
+- name: connectors-backing-services
+  memory: 512M
+  instances: 1
+  host: connectors-backing-services-${random-word}
+  domain: cfapps.io
+  path: target/connectors.jar
+  services:
+    - postgresql-db
+  env:
+    SPRING_PROFILES_ACTIVE: cloud
+    DEBUG: "true"
+    debug: "true"

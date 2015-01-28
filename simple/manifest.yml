@@ -1,0 +1,14 @@
+---
+applications:
+- name: simple-backing-services
+  memory: 512M
+  instances: 1
+  host: simple-backing-services-${random-word}
+  domain: cfapps.io
+  path: target/simple.jar
+  services:
+    - postgresql-db
+  env:
+    SPRING_PROFILES_ACTIVE: cloud
+    DEBUG: "true"
+    debug: "true"
